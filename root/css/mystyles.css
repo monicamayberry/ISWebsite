@@ -1,0 +1,10 @@
+body{
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
+    background-color: rgb(217, 215, 224);
+}
+h1, h2, h3, .subheading{
+    font-family: Verdana, Geneva, Tahoma, sans-serif !important;
+}
+a:hover{
+    color: rgb(126, 126, 153) !important;
+}

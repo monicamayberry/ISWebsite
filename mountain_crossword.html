@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mountain Guesser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        /* Style for individual letter boxes in guesses */
+        .letter-box {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 40px; /* Fixed width */
+            height: 40px; /* Fixed height */
+            border: 2px solid #cbd5e1; /* slate-300 */
+            margin: 2px;
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600; /* font-semibold */
+            text-transform: uppercase;
+            border-radius: 0.375rem; /* rounded-md */
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+        }
+        /* Color states for letter boxes */
+        .correct {
+            background-color: #10b981; /* emerald-500 */
+            border-color: #059669; /* emerald-600 */
+            color: white;
+        }
+        .present {
+            background-color: #f59e0b; /* amber-500 */
+            border-color: #d97706; /* amber-600 */
+            color: white;
+        }
+        .absent {
+            background-color: #ef4444; /* red-500 */
+            border-color: #dc2626; /* red-600 */
+            color: white;
+        }
+        /* Style for keyboard buttons */
+        .key {
+            transition: background-color 0.2s ease;
+        }
+        .key:active {
+            transform: scale(0.95);
+        }
+        /* Add subtle animation for guess submission */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .shake {
+            animation: shake 0.5s ease-in-out;
+        }
+        /* Style for message box */
+        .message-box {
+            transition: opacity 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-blue-100 to-indigo-200">
+
+    <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg w-full max-w-lg text-center">
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">Mountain Guesser</h1>
+        <p id="instructions" class="text-gray-600 mb-6">Guess the mountain name! You have 8 tries.</p>
+
+        <div id="guesses-container" class="mb-6 space-y-2 flex flex-col items-center">
+            </div>
+
+        <div id="current-guess-container" class="h-12 mb-6 flex justify-center items-center space-x-1">
+            </div>
+
+        <div id="message-box" class="message-box h-8 mb-4 text-lg font-semibold text-red-600 opacity-0">
+            </div>
+
+        <div id="keyboard" class="space-y-2">
+            </div>
+
+        <button id="reset-button" class="mt-6 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 transition duration-200 ease-in-out">
+            New Game
+        </button>
+    </div>
+
+    <script>
+        // --- Game Configuration ---
+        const MOUNTAIN_LIST = [
+            "Everest", "K2", "Kangchenjunga", "Lhotse", "Makalu",
+            "Denali", "Aconcagua", "Elbrus", "Kilimanjaro", "Matterhorn",
+            "Fuji", "Rainier", "Whitney", "Montblanc" // Added Mont Blanc
+        ];
+        const MAX_GUESSES = 8;
+
+        // --- DOM Elements ---
+        const guessesContainer = document.getElementById('guesses-container');
+        const currentGuessContainer = document.getElementById('current-guess-container');
+        const keyboardContainer = document.getElementById('keyboard');
+        const resetButton = document.getElementById('reset-button');
+        const messageBox = document.getElementById('message-box');
+        const instructionsText = document.getElementById('instructions');
+
+        // --- Game State ---
+        let secretWord = '';
+        let currentGuess = '';
+        let pastGuesses = []; // Stores arrays of { letter, state } objects
+        let remainingGuesses = MAX_GUESSES;
+        let wordLength = 0;
+        let isGameOver = false;
+
+        // --- Keyboard Layout ---
+        const KEYBOARD_LAYOUT = [
+            "QWERTYUIOP",
+            "ASDFGHJKL",
+            "ZXCVBNM"
+        ];
+
+        // --- Functions ---
+
+        /**
+         * Selects a random word from the list and initializes the game state.
+         */
+        function initGame() {
+            // 1. Select a random word
+            secretWord = MOUNTAIN_LIST[Math.floor(Math.random() * MOUNTAIN_LIST.length)].toUpperCase();
+            wordLength = secretWord.length;
+
+            // 2. Reset game state
+            currentGuess = '';
+            pastGuesses = [];
+            remainingGuesses = MAX_GUESSES;
+            isGameOver = false;
+
+            // 3. Clear UI elements
+            guessesContainer.innerHTML = '';
+            currentGuessContainer.innerHTML = '';
+            messageBox.textContent = '';
+            messageBox.style.opacity = '0'; // Hide message box
+            instructionsText.textContent = `Guess the ${wordLength}-letter mountain name! You have ${MAX_GUESSES} tries.`;
+
+
+            // 4. Create empty tiles for past guesses area (visual structure)
+            for (let i = 0; i < MAX_GUESSES; i++) {
+                const guessRow = document.createElement('div');
+                guessRow.classList.add('flex', 'space-x-1');
+                for (let j = 0; j < wordLength; j++) {
+                    const box = document.createElement('div');
+                    box.classList.add('letter-box');
+                    guessRow.appendChild(box);
+                }
+                guessesContainer.appendChild(guessRow);
+            }
+
+            // 5. Create empty tiles for the current guess display
+             updateCurrentGuessDisplay(); // Initialize with empty boxes
+
+            // 6. (Re)build the keyboard
+            buildKeyboard();
+
+            console.log("Secret Word:", secretWord); // For debugging
+        }
+
+        /**
+         * Builds the virtual keyboard UI.
+         */
+        function buildKeyboard() {
+            keyboardContainer.innerHTML = ''; // Clear previous keyboard
+
+            KEYBOARD_LAYOUT.forEach(row => {
+                const rowDiv = document.createElement('div');
+                rowDiv.classList.add('flex', 'justify-center', 'space-x-1', 'sm:space-x-2');
+                row.split('').forEach(key => {
+                    const button = createKeyButton(key);
+                    rowDiv.appendChild(button);
+                });
+                keyboardContainer.appendChild(rowDiv);
+            });
+
+            // Add Enter and Backspace row
+            const specialRowDiv = document.createElement('div');
+            specialRowDiv.classList.add('flex', 'justify-center', 'space-x-1', 'sm:space-x-2', 'mt-2');
+
+            const enterButton = createKeyButton('Enter', true); // Mark as special
+            const backspaceButton = createKeyButton('Backspace', true); // Mark as special
+
+            specialRowDiv.appendChild(enterButton);
+            specialRowDiv.appendChild(backspaceButton);
+            keyboardContainer.appendChild(specialRowDiv);
+        }
+
+        /**
+         * Creates a single keyboard button element.
+         * @param {string} key - The character for the key.
+         * @param {boolean} isSpecial - If true, style as Enter/Backspace.
+         */
+        function createKeyButton(key, isSpecial = false) {
+            const button = document.createElement('button');
+            button.textContent = key === 'Backspace' ? '⌫' : key; // Use icon for Backspace
+            button.classList.add(
+                'key', 'py-2', 'px-3', 'sm:px-4', 'text-sm', 'sm:text-base', 'font-semibold',
+                'rounded-md', 'shadow-sm', 'focus:outline-none', 'focus:ring-2',
+                'focus:ring-offset-2', 'uppercase'
+            );
+
+            if (isSpecial) {
+                button.classList.add('bg-gray-400', 'hover:bg-gray-500', 'text-white', 'focus:ring-gray-400', 'flex-grow', 'sm:flex-grow-0');
+                 button.style.minWidth = key === 'Enter' ? '60px' : '50px'; // Give more width
+            } else {
+                button.classList.add('bg-gray-200', 'hover:bg-gray-300', 'text-gray-700', 'focus:ring-indigo-500');
+            }
+
+            button.dataset.key = key.toUpperCase(); // Store key value
+
+            button.addEventListener('click', () => handleKeyPress(key.toUpperCase()));
+            return button;
+        }
+
+
+        /**
+         * Handles clicks on the virtual keyboard buttons.
+         * @param {string} key - The uppercase key pressed ('A'-'Z', 'ENTER', 'BACKSPACE').
+         */
+        function handleKeyPress(key) {
+            if (isGameOver) return; // Don't process input if game is over
+
+            if (key === 'ENTER') {
+                submitGuess();
+            } else if (key === 'BACKSPACE') {
+                deleteLetter();
+            } else if (currentGuess.length < wordLength && /^[A-Z]$/.test(key)) {
+                // Only add letter if current guess is shorter than the word length
+                addLetter(key);
+            }
+             updateCurrentGuessDisplay(); // Update display after any key press
+        }
+
+        /**
+         * Adds a letter to the current guess.
+         * @param {string} letter - The uppercase letter to add.
+         */
+        function addLetter(letter) {
+            if (currentGuess.length < wordLength) {
+                currentGuess += letter;
+            }
+        }
+
+        /**
+         * Removes the last letter from the current guess.
+         */
+        function deleteLetter() {
+            currentGuess = currentGuess.slice(0, -1);
+        }
+
+        /**
+         * Updates the display for the current guess being typed.
+         */
+        function updateCurrentGuessDisplay() {
+            currentGuessContainer.innerHTML = ''; // Clear previous state
+            for (let i = 0; i < wordLength; i++) {
+                const box = document.createElement('div');
+                box.classList.add('letter-box', 'border-gray-400'); // Default border
+                if (currentGuess[i]) {
+                    box.textContent = currentGuess[i];
+                    box.classList.add('border-gray-600'); // Indicate filled box
+                }
+                currentGuessContainer.appendChild(box);
+            }
+        }
+
+
+        /**
+         * Processes the current guess when Enter is pressed.
+         */
+        function submitGuess() {
+            if (currentGuess.length !== wordLength) {
+                showMessage(`Guess must be ${wordLength} letters long!`);
+                // Add shake animation to the current guess container
+                currentGuessContainer.classList.add('shake');
+                setTimeout(() => currentGuessContainer.classList.remove('shake'), 500);
+                return;
+            }
+
+            // --- Evaluate the guess ---
+            const evaluation = evaluateGuess(currentGuess, secretWord);
+            pastGuesses.push(evaluation); // Store the evaluated guess
+
+            // --- Update the UI ---
+            displayPastGuess(evaluation, MAX_GUESSES - remainingGuesses);
+            updateKeyboardColors(evaluation); // Update keyboard based on guess
+
+            // --- Clear current guess ---
+            currentGuess = '';
+            updateCurrentGuessDisplay(); // Clear the current guess input area
+
+            // --- Decrement remaining guesses ---
+            remainingGuesses--;
+
+            // --- Check win/lose conditions ---
+            if (evaluation.every(item => item.state === 'correct')) {
+                showMessage(`You guessed it! ${secretWord}`, true);
+                isGameOver = true;
+                disableKeyboard();
+            } else if (remainingGuesses === 0) {
+                showMessage(`Out of guesses! The word was: ${secretWord}`, false);
+                isGameOver = true;
+                disableKeyboard();
+            } else {
+                 instructionsText.textContent = `You have ${remainingGuesses} guesses left.`;
+            }
+        }
+
+        /**
+         * Compares the guess against the secret word and determines letter states.
+         * @param {string} guess - The user's guess (uppercase).
+         * @param {string} target - The secret word (uppercase).
+         * @returns {Array<{letter: string, state: 'correct'|'present'|'absent'}>}
+         */
+        function evaluateGuess(guess, target) {
+            const result = [];
+            const targetLetterCounts = {};
+            const guessArray = guess.split('');
+            const targetArray = target.split('');
+
+            // Initialize result array and count target letters
+            for (let i = 0; i < target.length; i++) {
+                result[i] = { letter: guessArray[i], state: 'absent' }; // Default to absent
+                targetLetterCounts[targetArray[i]] = (targetLetterCounts[targetArray[i]] || 0) + 1;
+            }
+
+            // First pass: Mark correct letters (green)
+            for (let i = 0; i < target.length; i++) {
+                if (guessArray[i] === targetArray[i]) {
+                    result[i].state = 'correct';
+                    targetLetterCounts[guessArray[i]]--; // Decrement count for used letter
+                }
+            }
+
+            // Second pass: Mark present letters (yellow)
+            for (let i = 0; i < target.length; i++) {
+                // Check if it wasn't already marked correct and if the letter exists elsewhere
+                if (result[i].state !== 'correct' && targetLetterCounts[guessArray[i]] > 0) {
+                    result[i].state = 'present';
+                    targetLetterCounts[guessArray[i]]--; // Decrement count
+                }
+            }
+             // Note: 'absent' is the default state, so no third pass needed.
+
+            return result;
+        }
+
+        /**
+         * Displays a submitted guess with color-coded feedback in the history area.
+         * @param {Array<{letter: string, state: string}>} evaluatedGuess - The result from evaluateGuess.
+         * @param {number} guessIndex - The index of the guess (0-based).
+         */
+        function displayPastGuess(evaluatedGuess, guessIndex) {
+            const guessRow = guessesContainer.children[guessIndex]; // Get the correct row div
+            if (!guessRow) return; // Should not happen, but safety check
+
+            // Clear existing content (should be empty boxes) and apply new styles
+            guessRow.innerHTML = ''; // Clear placeholders if any remained
+            evaluatedGuess.forEach(item => {
+                const box = document.createElement('div');
+                box.classList.add('letter-box', item.state); // 'correct', 'present', or 'absent'
+                box.textContent = item.letter;
+                guessRow.appendChild(box);
+            });
+        }
+
+        /**
+         * Updates the colors of the virtual keyboard keys based on guess feedback.
+         * @param {Array<{letter: string, state: string}>} evaluatedGuess
+         */
+        function updateKeyboardColors(evaluatedGuess) {
+            evaluatedGuess.forEach(item => {
+                const keyButton = keyboardContainer.querySelector(`button[data-key="${item.letter}"]`);
+                if (!keyButton) return;
+
+                const currentBg = keyButton.classList.contains('bg-emerald-500') ? 'correct' :
+                                keyButton.classList.contains('bg-amber-500') ? 'present' :
+                                keyButton.classList.contains('bg-red-500') ? 'absent' :
+                                'default';
+
+                // Determine the highest priority state for the key
+                let newState = item.state; // 'correct', 'present', 'absent'
+
+                // Priority: Correct > Present > Absent
+                if (currentBg === 'correct') {
+                    newState = 'correct'; // Don't downgrade from correct
+                } else if (currentBg === 'present' && newState === 'absent') {
+                    newState = 'present'; // Don't downgrade from present to absent
+                }
+
+                // Remove previous color classes before adding new one
+                keyButton.classList.remove('bg-gray-200', 'hover:bg-gray-300', 'text-gray-700'); // Default
+                keyButton.classList.remove('bg-emerald-500', 'hover:bg-emerald-600', 'text-white'); // Correct
+                keyButton.classList.remove('bg-amber-500', 'hover:bg-amber-600', 'text-white'); // Present
+                keyButton.classList.remove('bg-red-500', 'hover:bg-red-600', 'text-white'); // Absent
+
+                // Apply new color based on state
+                switch (newState) {
+                    case 'correct':
+                        keyButton.classList.add('bg-emerald-500', 'hover:bg-emerald-600', 'text-white');
+                        break;
+                    case 'present':
+                        keyButton.classList.add('bg-amber-500', 'hover:bg-amber-600', 'text-white');
+                        break;
+                    case 'absent':
+                        keyButton.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white');
+                        break;
+                }
+            });
+        }
+
+
+        /**
+         * Disables all letter, Enter, and Backspace keys on the virtual keyboard.
+         */
+        function disableKeyboard() {
+            keyboardContainer.querySelectorAll('button').forEach(button => {
+                button.disabled = true;
+                button.classList.add('opacity-50', 'cursor-not-allowed');
+                 // Remove hover effects when disabled
+                button.classList.remove('hover:bg-gray-300', 'hover:bg-gray-500', 'hover:bg-emerald-600', 'hover:bg-amber-600', 'hover:bg-red-600');
+            });
+        }
+
+        /**
+         * Displays a message to the user (e.g., win/lose, error).
+         * @param {string} text - The message to display.
+         * @param {boolean|null} isSuccess - True for win, false for lose/error, null for neutral.
+         */
+        function showMessage(text, isSuccess = null) {
+            messageBox.textContent = text;
+            messageBox.classList.remove('text-red-600', 'text-green-600', 'text-gray-700'); // Clear previous colors
+
+            if (isSuccess === true) {
+                messageBox.classList.add('text-green-600'); // Success color
+            } else if (isSuccess === false) {
+                messageBox.classList.add('text-red-600'); // Error/loss color
+            } else {
+                 messageBox.classList.add('text-gray-700'); // Neutral/info color
+            }
+
+            messageBox.style.opacity = '1'; // Make it visible
+
+            // Optionally hide the message after a delay for non-game-ending messages
+            if (isSuccess === null) {
+                 setTimeout(() => {
+                    if (!isGameOver) { // Only hide if game isn't over
+                       messageBox.style.opacity = '0';
+                    }
+                 }, 2000); // Hide after 2 seconds
+            }
+        }
+
+        // --- Event Listeners ---
+        resetButton.addEventListener('click', initGame);
+
+        // Optional: Add physical keyboard support
+        document.addEventListener('keydown', (event) => {
+            if (isGameOver) return;
+
+            const key = event.key.toUpperCase();
+
+            if (key === 'ENTER') {
+                handleKeyPress('ENTER');
+            } else if (key === 'BACKSPACE') {
+                handleKeyPress('BACKSPACE');
+            } else if (key.length === 1 && key >= 'A' && key <= 'Z') {
+                handleKeyPress(key);
+            }
+        });
+
+
+        // --- Initial Game Setup ---
+        initGame(); // Start the game when the page loads
+
+    </script>
+
+</body>
+</html>
